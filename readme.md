@@ -86,10 +86,7 @@ First, add an antivirus exclusion so Defender doesn't quarantine the patcher:
 3. Scroll to **Exclusions** → **Add or remove exclusions**
 4. Click **Add an exclusion** → **Folder** → select `C:\HLServer`
 
-Now extract the WON2 Server Patch zip into `C:\HLServer\`. The zip contains two executables:
-
-- `no-won-win.exe` — **Use this one.** This is the patcher for the original 4.1.1.0 `swds.dll`.
-- `no-won-win4111.exe` — Do NOT use this. This is for a different version and will report "wrong version" on the 4.1.1.0 file.
+Now extract the WON2 Server Patch zip into `C:\HLServer\`. Find the file called `no-won-win.exe`.
 
 Run `no-won-win.exe` and point it at `C:\HLServer\swds.dll`. It should report that the patch was applied successfully. If it says "wrong version or file already patched", you are still using the HLDS2-overwritten `swds.dll` — go back to Step 3.
 
@@ -205,7 +202,7 @@ Your server should appear on [https://won2.net/Browse-Servers/](https://won2.net
 
 - **Client setup matters too.** Players connecting to your server also need a WON2-patched Half-Life client. See the [Steamless CS Project step-by-step guide for players](https://v5.steamlessproject.nl/index.php?page=stepbystepplayer) for client setup instructions.
 
-- **You cannot test external connectivity from inside your own network.** Connecting to your own public IP from behind the same router will fail with "LAN servers are restricted to local clients." This is a NAT hairpinning limitation, not a server problem. Use the LAN IP to connect locally, or test from a device on a different network (e.g. phone hotspot).
+- **Testing from inside your own network.** Connecting to your own public IP from behind the same router may or may not work depending on whether your router supports NAT hairpinning. If it doesn't, you'll get a timeout or "LAN servers are restricted to local clients." This is a router limitation, not a server problem. Use the LAN IP to connect locally, or test from a device on a different network (e.g. phone hotspot).
 
 - **The `custom.hpk` error is harmless.** This file stores player spray logos and is created automatically after the first player connects.
 
@@ -230,15 +227,50 @@ Players need a WON2-patched Half-Life or Counter-Strike Retail client. There are
 
 ### Connecting
 
-Launch the game, go to **Multiplayer → Internet Games → Update List** to browse WON2 servers, or open the console (`~`) and type:
+Create a shortcut to `hl.exe` (or `cstrike.exe` if using CS Retail). Right-click → Properties and set the target to:
+
+```
+"C:\Sierra\Counter-Strike\hl.exe" -game cstrike -gl -console -32bpp -noipx
+```
+
+Replace the path with your actual install location.
+
+**Useful client launch flags:**
+
+| Flag | Purpose |
+|------|---------|
+| `-gl` | OpenGL renderer (recommended for modern systems) |
+| `-d3d` | Direct3D renderer (alternative if OpenGL has issues) |
+| `-w 1920 -h 1080` | Force a specific resolution (use your monitor's native resolution) |
+| `-console` | Enables the developer console (tilde `~` key) |
+| `-32bpp` | 32-bit color depth |
+| `-noipx` | Disables IPX networking (not needed, reduces startup time) |
+| `-nofbo` | Fixes some OpenGL rendering issues on modern GPUs |
+
+A good all-purpose shortcut for widescreen:
+
+```
+"C:\Sierra\Counter-Strike\hl.exe" -game cstrike -gl -console -32bpp -noipx -w 1920 -h 1080
+```
+
+Once in-game, go to **Multiplayer → Internet Games → Update List** to browse WON2 servers, or open the console (`~`) and type:
 
 ```
 connect YOUR_SERVER_PUBLIC_IP:27015
 ```
 
-### Widescreen Support
+### Widescreen and Display Scaling
 
-If the 1.1.1.2 patch doesn't add widescreen resolutions to the video menu, apply the [Resolution/FOV/MP3 Patch](https://www.moddb.com/downloads/half-life-won-resolution-fov-mp3-patch) on top. Use the 1.1.1.0 version. Note: this patches `hl.exe`, so if you're launching via `cstrike.exe`, either switch to launching with `hl.exe -game cstrike` or copy the patched `hl.exe` over `cstrike.exe`. You may also need to right-click the shortcut → Properties → Compatibility → check "Override high DPI scaling behavior" → set to "Application".
+If the 1.1.1.2 patch doesn't add widescreen resolutions to the video menu, apply the [Resolution/FOV/MP3 Patch](https://www.moddb.com/downloads/half-life-won-resolution-fov-mp3-patch) on top. Use the 1.1.1.0 version. Note: this patches `hl.exe`, so if you're launching via `cstrike.exe`, either switch to launching with `hl.exe -game cstrike` or copy the patched `hl.exe` over `cstrike.exe`.
+
+**DPI scaling fix (important on modern high-DPI displays):**
+
+1. Right-click your game shortcut → **Properties** → **Compatibility** tab
+2. Check **"Override high DPI scaling behavior"**
+3. Set "Scaling performed by" to **Application**
+4. Leave all other compatibility options unchecked
+
+This prevents Windows from trying to scale the game window, which causes the display to be too large or blurry. Combined with the `-w` and `-h` launch flags, the game should render at native resolution.
 
 > **Note:** If the Steamless Project download links are dead, [this Internet Archive collection](https://archive.org/details/hlwon_upd) has mirrors of the patches.
 
@@ -252,8 +284,8 @@ If the 1.1.1.2 patch doesn't add widescreen resolutions to the video menu, apply
 |---------|----------|
 | Server doesn't appear on won2.net | Verify `valvecomm.lst` contains WON2 master server addresses. Check that UDP 27015 is forwarded on your router. |
 | Players time out connecting | Ensure `swds.dll` is the patched **original 4.1.1.0** version, not the HLDS2 version. Re-apply `no-won-win.exe` if needed. |
-| "LAN servers restricted to local clients" | You're connecting from inside your own network via the public IP. Use the LAN IP instead, or test from an external network. |
-| WON2 patcher says "wrong version" | You're patching the HLDS2 version of `swds.dll`. Restore the original 4.1.1.0 `swds.dll` and try again. Use `no-won-win.exe`, not `no-won-win4111.exe`. |
+| "LAN servers restricted to local clients" | This error means the `swds.dll` patch was not applied, so `+sv_lan 1` is restricting the server to LAN only. Restore the original 4.1.1.0 `swds.dll` and re-apply `no-won-win.exe` (see Steps 3 and 5). If this occurs when connecting from inside your own network via the public IP, it may also be a NAT hairpinning issue — try using the LAN IP instead. |
+| WON2 patcher says "wrong version" | You're patching the HLDS2 version of `swds.dll`. Restore the original 4.1.1.0 `swds.dll` and try again (see Step 3). |
 | HLDS binds to wrong IP (172.x.x.x) | Add `+ip YOUR_LAN_IP` to the launch arguments. |
 | Defender blocks the WON2 patcher | Add `C:\HLServer` as an exclusion in Windows Security → Virus & threat protection → Exclusions. |
 | Server shows on won2.net but players can't connect | Check your router port forwarding. UDP 27015 must be forwarded all the way through to your server's LAN IP. If you have double NAT (ISP gateway + your router), both layers need to pass the traffic. |
@@ -263,9 +295,7 @@ If the 1.1.1.2 patch doesn't add widescreen resolutions to the video menu, apply
 
 ## Why Not Docker on WSL2?
 
-If you're a Linux user, [Ch0wW's docker-hlds-won2](https://github.com/Ch0wW/docker-hlds-won2) project is an excellent turnkey Docker image that handles the entire HLDS + WON2 setup automatically using a Debian 8 i386 container. On a native Linux machine, it works perfectly.
-
-However, **running this Docker image on Windows 10 via WSL2 does not work for game servers**, and the reasons are non-obvious:
+[Ch0wW's docker-hlds-won2](https://github.com/Ch0wW/docker-hlds-won2) is a Docker image that automates the HLDS + WON2 setup using a Debian 8 i386 container. It may be a viable option on a native Linux host or VPS, but **it does not work for game servers on Windows 10 via WSL2**, and the reasons are non-obvious:
 
 ### Docker Desktop for Windows (does not work)
 
@@ -285,4 +315,4 @@ Extracting the 32-bit Linux HLDS binaries from the Docker image and running them
 
 ### Recommendation
 
-For Windows, run HLDS natively — it's a 32-bit Windows application that runs fine on Windows 10 (and XP, 7, 8, etc.) with no compatibility layers needed. For Linux, use Ch0wW's Docker image on a native Linux host or a VPS with a real public IP.
+For Windows, run HLDS natively — it's a 32-bit Windows application that runs fine on Windows 10 (and XP, 7, 8, etc.) with no compatibility layers needed.
