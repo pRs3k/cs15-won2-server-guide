@@ -222,7 +222,7 @@ Players need a WON2-patched Half-Life or Counter-Strike Retail client. There are
 ### From a Counter-Strike Retail CD
 
 1. Install Counter-Strike Retail from CD
-2. Download and install the [CS Retail update 1.0.0.5](https://www.gamefront.com/games/counter-strike/file/counter-strike-retail-1-5-full/download) (`cs1005.exe`) — this includes CS 1.5
+2. Download and install the [CS Retail update 1.0.0.5](https://contentuk.planetwon2.com/pw2/cs1005.exe) (`cs1005.exe`) — this includes CS 1.5
 3. Download and install the [Half-Life 1.1.1.2 Retail Update](https://www.moddb.com/downloads/half-life-update-1112-patch)
 
 ### Connecting
