@@ -227,6 +227,7 @@ Players need a WON2-patched Half-Life or Counter-Strike Retail client. There are
 4. Modify the installation path to be C:\Sierra\Counter-Strike\ and accept the prompt to install into the existing directory
 5. Right click the icon to launch Counter-Strike > Properties > Modify "Target" to be "C:\Sierra\Counter-Strike\hl.exe" -game cstrike" 
 6. Repeat this for any shortcuts to mods to have them launch using the patched hl.exe rather than the unpatched cstrike.exe
+7. When propted, enter the CD key on your Counter-Strike retail case (even though it asks for a Half-Life cd key)
 
 ### Connecting
 
