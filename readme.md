@@ -227,7 +227,21 @@ Players need a WON2-patched Half-Life or Counter-Strike Retail client. There are
 4. Modify the installation path to be C:\Sierra\Counter-Strike\ and accept the prompt to install into the existing directory
 5. Right click the icon to launch Counter-Strike > Properties > Modify "Target" to be "C:\Sierra\Counter-Strike\hl.exe" -game cstrike" 
 6. Repeat this for any shortcuts to mods to have them launch using the patched hl.exe rather than the unpatched cstrike.exe
-7. When propted, enter the CD key on your Counter-Strike retail case (even though it asks for a Half-Life cd key)
+7. If using a widescreen monitor, see the following section to add widescreen support
+8. Launch Counter-Strike. When propted, enter the CD key on your Counter-Strike retail case (even though it asks for a Half-Life cd key)
+
+### Widescreen and Display Scaling
+
+To add widescreen resolutions to the video menu, apply the [Resolution/FOV/MP3 Patch](https://www.moddb.com/downloads/half-life-won-resolution-fov-mp3-patch) on top. Use the Half-Life 1.1.1.0 version. Note: this patches `hl.exe`, so if you're launching via `cstrike.exe`, either switch to launching with `hl.exe -game cstrike` or copy the patched `hl.exe` over `cstrike.exe`.
+
+**DPI scaling fix (important on modern high-DPI displays on modern Windows- likely not necessary in Windows XP):**
+
+1. Right-click your game shortcut → **Properties** → **Compatibility** tab
+2. Check **"Override high DPI scaling behavior"**
+3. Set "Scaling performed by" to **Application**
+4. Leave all other compatibility options unchecked
+
+This prevents Windows from trying to scale the game window, which causes the display to be too large or blurry. Combined with the `-w` and `-h` launch flags, the game should render at native resolution.
 
 ### Connecting
 
@@ -263,23 +277,6 @@ Once in-game, go to **Multiplayer → Internet Games → Update List** to browse
 connect YOUR_SERVER_PUBLIC_IP:27015
 ```
 
-### Widescreen and Display Scaling
-
-If the 1.1.1.2 patch doesn't add widescreen resolutions to the video menu, apply the [Resolution/FOV/MP3 Patch](https://www.moddb.com/downloads/half-life-won-resolution-fov-mp3-patch) on top. Use the 1.1.1.0 version. Note: this patches `hl.exe`, so if you're launching via `cstrike.exe`, either switch to launching with `hl.exe -game cstrike` or copy the patched `hl.exe` over `cstrike.exe`.
-
-**DPI scaling fix (important on modern high-DPI displays):**
-
-1. Right-click your game shortcut → **Properties** → **Compatibility** tab
-2. Check **"Override high DPI scaling behavior"**
-3. Set "Scaling performed by" to **Application**
-4. Leave all other compatibility options unchecked
-
-This prevents Windows from trying to scale the game window, which causes the display to be too large or blurry. Combined with the `-w` and `-h` launch flags, the game should render at native resolution.
-
-> **Note:** If the Steamless Project download links are dead, [this Internet Archive collection](https://archive.org/details/hlwon_upd) has mirrors of the patches.
-
-> **Do not use Steam.** The Steam version of Half-Life/CS uses Protocol 47/48 and is completely incompatible with WON2 (Protocol 46).
-
 ---
 
 ## Troubleshooting
@@ -294,6 +291,10 @@ This prevents Windows from trying to scale the game window, which causes the dis
 | Defender blocks the WON2 patcher | Add `C:\HLServer` as an exclusion in Windows Security → Virus & threat protection → Exclusions. |
 | Server shows on won2.net but players can't connect | Check your router port forwarding. UDP 27015 must be forwarded all the way through to your server's LAN IP. If you have double NAT (ISP gateway + your router), both layers need to pass the traffic. |
 | Server listed but with wrong hostname | The `+hostname` launch parameter overrides `server.cfg`. If your `server.cfg` changes aren't taking effect, add `+hostname "Your Name"` to the shortcut target. |
+
+> **Note:** If the Steamless Project download links are dead, [this Internet Archive collection](https://archive.org/details/hlwon_upd) has mirrors of the patches.
+
+> **Do not use Steam.** The Steam version of Half-Life/CS uses Protocol 47/48 and is completely incompatible with WON2 (Protocol 46).
 
 ---
 
