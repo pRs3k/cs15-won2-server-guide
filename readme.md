@@ -224,6 +224,9 @@ Players need a WON2-patched Half-Life or Counter-Strike Retail client. There are
 1. Install Counter-Strike Retail from CD
 2. Download and install the [CS Retail update 1.0.0.5](http://files.steamlessproject.nl/download.php?id=11) (`cs1005.exe`) — this includes CS 1.5
 3. Download and install the [Half-Life 1.1.1.2 Retail Update](https://www.moddb.com/downloads/half-life-update-1112-patch)
+4. Modify the installation path to be C:\Sierra\Counter-Strike\ and accept the prompt to install into the existing directory
+5. Right click the icon to launch Counter-Strike > Properties > Modify "Target" to be "C:\Sierra\Counter-Strike\hl.exe" -game cstrike" 
+6. Repeat this for any shortcuts to mods to have them launch using the patched hl.exe rather than the unpatched cstrike.exe
 
 ### Connecting
 
