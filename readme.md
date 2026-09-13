@@ -1,6 +1,6 @@
 # Counter-Strike 1.5 Dedicated Server on WON2 — Windows 10 Setup Guide
 
-A complete guide to running a Half-Life Dedicated Server (HLDS) with Counter-Strike 1.5 on the WON2 network, natively on Windows 10.
+A complete guide to running a Half-Life Dedicated Server (HLDS) with Counter-Strike 1.5 on the WON2 network, natively on Windows 10. Also works unchanged inside a Windows VM on Proxmox — see [Running This on Proxmox](#running-this-on-proxmox-as-a-windows-vm) below.
 
 > **The critical discovery this guide documents:** HLDS2 overwrites `swds.dll` with a version that the WON2 server patcher cannot patch. Without the patch, `+sv_lan 1` makes the server LAN-only and outside players will time out when connecting. Without `+sv_lan 1`, the server tries to authenticate against dead WON servers and connections also time out. **You must restore the original 4.1.1.0 `swds.dll` and patch it with `no-won-win.exe` before anything else will work.** This is not documented in any existing guide and is the single most common reason WON2 server setups fail on Windows.
 
@@ -295,6 +295,63 @@ connect YOUR_SERVER_PUBLIC_IP:27015
 > **Note:** If the Steamless Project download links are dead, [this Internet Archive collection](https://archive.org/details/hlwon_upd) has mirrors of the patches.
 
 > **Do not use Steam.** The Steam version of Half-Life/CS uses Protocol 47/48 and is completely incompatible with WON2 (Protocol 46).
+
+---
+
+## Running This on Proxmox (as a Windows VM)
+
+Everything in this guide works unchanged inside a Windows VM on Proxmox — HLDS is a native Win32 application, so virtualizing it costs nothing in compatibility. This section covers the VM-specific setup; once Windows is installed, follow Steps 1–11 above exactly as written.
+
+### VM configuration that avoids BSODs
+
+Windows VMs on Proxmox/KVM can be flaky with the default settings (`CRITICAL_PROCESS_DIED` crashes are a common failure mode, especially with VirtIO drivers on a fresh install). The config below is the one that installed and ran cleanly with no driver-injection step required:
+
+```
+qm create <vmid> --name cs15-won2-server \
+  --memory 4096 --cores 2 --cpu host \
+  --machine q35 --bios ovmf \
+  --efidisk0 local-lvm:1,efitype=4m,pre-enrolled-keys=1 \
+  --tpmstate0 local-lvm:1,version=v2.0 \
+  --scsihw virtio-scsi-pci \
+  --sata0 local-lvm:60,format=raw \
+  --net0 e1000,bridge=vmbr0 \
+  --ide2 local:iso/<your-windows-iso>,media=cdrom \
+  --boot order=ide2
+```
+
+Key points:
+- **`e1000` NIC and a `sata0` disk, not VirtIO.** VirtIO needs drivers injected during Windows Setup (via a second attached ISO) or Windows won't see a disk to install to. `e1000`/SATA are natively supported by Windows with zero extra steps, at the cost of somewhat lower theoretical throughput — irrelevant for a game server pushing UDP packets.
+- **`--tpmstate0` and `--bios ovmf` (UEFI) are required for Windows 11.** Windows 10 doesn't need them, but if you only have a Windows 11 ISO handy, this works fine — HLDS has no OS-version dependency.
+- **`--cpu host`**, not the default `kvm64`. The default conservative CPU type is known to cause hangs in some Windows workloads on Proxmox; `host` exposes the physical CPU's real feature set.
+- **Bridge to your main LAN (`vmbr0` or equivalent)**, not an isolated/internal-only bridge. The VM needs a routable LAN IP for port forwarding to work, same as a physical PC would.
+- Give the VM a **static IP** (either via Windows' network settings or DHCP reservation) so your router's port-forward rule doesn't break when the IP changes.
+
+### The gotcha: Windows silently blocks inbound traffic on this NIC type
+
+After first boot, Windows may bind the `e1000` adapter to the **Public** network firewall profile even if you select "Work" or "Private" during setup. This silently blocks inbound connections — including RDP, and potentially the game port rule from Step 9 if it was scoped to specific profiles — with no obvious error. `New-NetFirewallRule` succeeds, the rule shows as enabled, and it still doesn't work.
+
+Check and fix it from an elevated PowerShell:
+
+```powershell
+Get-NetConnectionProfile   # look for NetworkCategory: Public
+
+Set-NetConnectionProfile -InterfaceIndex <N> -NetworkCategory Private
+Set-NetFirewallRule -Name "HLDS WON2 UDP" -Profile Any   # or re-create it with -Profile Any
+```
+
+If you can't get a network profile change to stick, widening the specific rule to `-Profile Any` is sufficient on its own.
+
+### Step 10 changes slightly
+
+Port-forward UDP 27015 to the **VM's** IP address, not the Proxmox host's IP. Everything else in Step 10 (double-NAT considerations, etc.) is unchanged.
+
+### Why not a native Linux HLDS install instead of a Windows VM?
+
+Half-Life has a Linux dedicated server build, and Proxmox is a Linux-first hypervisor, so running HLDS natively in an LXC container looks appealing. It doesn't work for this specific setup: the WON2 patch (Step 5) is a binary patcher (`no-won-win.exe`) that modifies the Windows `swds.dll` PE binary specifically. The Linux build uses different binaries entirely (`.so` files), and no equivalent WON2 patch exists for them. Reverse-engineering a Linux-native patch is out of scope — a Windows VM is the practical path.
+
+### Bonus: snapshots
+
+Once the server is fully configured (through Step 9), shut down and take a Proxmox snapshot. If a future Windows Update or misconfiguration breaks something, you can roll back in seconds instead of redoing the whole setup.
 
 ---
 
