@@ -192,6 +192,63 @@ Your server should appear on [https://won2.net/Browse-Servers/](https://won2.net
 
 ---
 
+## Optional: AMX Mod X (Admin, RockTheVote, HookMod, Rats Maps)
+
+This adds a full plugin stack on top of the base server: admin commands, map-vote (RockTheVote), the HookMod grappling-hook plugin, a lightweight anti-cheat, and an expanded rats map rotation. Everything here is layered on top of Steps 1–11 — don't skip those first.
+
+### Compatibility note
+
+This server runs the original June 2002 WON build of `swds.dll`/`mp.dll` — **over a decade older** than anything the modern AMX Mod X/Metamod ecosystem is built and tested against. Two concrete consequences observed on this exact build:
+
+- **AMX Mod X's gamedata (CRC-signature-based memory hooks) doesn't recognize this binary.** On startup you'll see `GameConfig CRC mismatch ... library "engine"` warnings, and the log will report `client_disconnected and client_remove forwards have been disabled` and `Binding/Hooking cvars have been disabled`. This is expected and non-fatal — the core plugin system, admin tools, map voting, and script-only plugins all work fine — but any plugin relying on those specific disabled forwards/hooks will be degraded.
+- **Anti-cheat plugins built for ReHLDS/ReGameDLL (the modern community-rewritten CS 1.6 engine/mod binaries) will not work here**, and installing one is a real crash risk, not just a "might not work" — they read memory layouts specific to those rewritten binaries, which bear no relation to the original 2002 binary this server runs. Stick to plugins that work over the network protocol (like client-cvar queries) rather than memory scanning.
+
+If a plugin you want doesn't load cleanly, expect to need to patch or rewrite it — the ecosystem simply wasn't built with this old a binary in mind.
+
+### Install Metamod + AMX Mod X
+
+1. Download and extract [Metamod v1.21.1-am](https://amxmodx.org/release/metamod-1.21.1-am.zip) — place `metamod.dll` in `C:\HLServer\cstrike\addons\metamod\dlls\`.
+2. Create `C:\HLServer\cstrike\addons\metamod\plugins.ini` containing:
+   ```
+   win32 addons/amxmodx/dlls/amxmodx_mm.dll
+   ```
+3. In `C:\HLServer\cstrike\liblist.gam`, change:
+   ```
+   gamedll "dlls\mp.dll"
+   ```
+   to:
+   ```
+   gamedll "addons\metamod\dlls\metamod.dll"
+   ```
+4. Download the [AMX Mod X Base (Windows)](https://github.com/alliedmodders/amxmodx/releases/download/1.10.0.5481/amxmodx-1.10.0-git5481-base-windows.zip) and [Counter-Strike Addon (Windows)](https://github.com/alliedmodders/amxmodx/releases/download/1.10.0.5481/amxmodx-1.10.0-git5481-cstrike-windows.zip) packages. Extract both into `C:\HLServer\cstrike\` (they merge into the same `addons\amxmodx\` folder).
+5. Start the server and type `meta list` then `amxx plugins` in the console to confirm both loaded.
+
+Admin commands, admin menus, and map-vote/nextmap (`mapchooser.amxx` — this is AMX Mod X's modern merged RockTheVote/nextmap plugin) are all enabled by default in `addons/amxmodx/configs/plugins.ini` — no extra setup needed. Admins are configured in `addons/amxmodx/configs/users.ini`.
+
+### Install HookMod
+
+[HookMod](https://gamebanana.com/mods/39531) (grappling-hook weapon, bind a key to fire it) ships as a single self-contained AMX Mod X plugin (`adminhook.amxx`, no separate module/DLL needed):
+
+1. Download `hook.rar`, extract, and copy `adminhook.amxx` to `cstrike\addons\amxmodx\plugins\`.
+2. Add a line for it in `cstrike\addons\amxmodx\configs\plugins.ini`.
+
+### Anti-cheat: CvarGuard (custom, lightweight)
+
+Given the ReHLDS/ReGameDLL incompatibility above, this server uses a small custom plugin (`cvarguard.sma`, compiled with the `amxxpc.exe` bundled in `addons/amxmodx/scripting/`) instead of a stock anti-cheat module. It uses GoldSrc's native `query_client_cvar` — a stable, network-protocol-level feature present since the original engine, not a memory scan — to periodically check each client's `cl_lw` cvar. A forced `cl_lw 0` is a known config-cheat pattern (disables lagged-weapon/hitbox prediction); the plugin logs it and kicks after 3 strikes. It won't catch aimbots or wallhacks — that requires the memory-level hooking this binary's gamedata doesn't support — but it's a real, working layer with zero crash risk, and it's easy to extend with more cvar checks (`rate`, `cl_updaterate`, etc.) if you want to tighten it further. Combined with the admin tools' manual kick/ban, this covers config-based cheating and gives you recourse for anything else that gets reported.
+
+### Rats map pack
+
+Two verified map sources add 9 rats-genre maps to `mapcycle.txt`:
+
+- [Rats Map Pack](https://varq.net/en/maps/counter-strike-1.6/rats-map-pack) — `cs_rats2`, `de_rats`, `de_rats3`, `de_rats4_final`
+- [Chris Spain's CS Rats Pack](https://gamebanana.com/mods/452532) (the original rats maps author's own releases) — `de_rats_2001`, `de_rats_2002`, `de_rats2_2002`, `de_rats3_2002`, `de_ratsxl`
+
+Extract each pack's `maps\*.bsp`/`*.res`/`*.txt` into `cstrike\maps\`, and add the map names (one per line, no extension) to `cstrike\mapcycle.txt`.
+
+> **Note:** `de_desktop` (referenced in some map lists) could not be tracked down from a live, verifiable download source at the time of writing. If you find a working link, it installs the same way as the maps above.
+
+---
+
 ## Important Notes
 
 - **`+sv_lan 1` is required.** This sounds counterintuitive, but with the patched `swds.dll`, this flag redirects the server to use WON2 master servers instead of the dead original WON auth servers. Without it, the server will try to authenticate through dead servers and outside players will time out. Without the `swds.dll` patch, this flag restricts the server to LAN only.
