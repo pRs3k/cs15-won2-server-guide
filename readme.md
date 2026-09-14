@@ -254,9 +254,9 @@ This won't catch aimbots or wallhacks (nothing will, on this binary, without dee
 
 Three small plugins, compiled locally with the `amxxpc.exe` bundled in `addons/amxmodx/scripting/` (no third-party download needed — write the `.sma`, run `amxxpc.exe yourplugin.sma`, copy the resulting `.amxx` to `addons/amxmodx/plugins/`, add it to `plugins.ini`):
 
-- **Nominations** — `nominate <mapname>` lets players nominate a map into a shared pool (max 6); `amx_nomvote` (admin) starts a vote among nominated maps, 20 second timer, changes level to the winner. Companion to the stock `mapchooser.amxx` vote-for-nextmap system.
-- **AFK Manager** — tracks player position via `get_user_origin` on a repeating timer; no movement for 60s gets a warning, 180s gets kicked. Pure polling, no forwards/hooks that this build doesn't support.
-- **Low Gravity** — `amx_lowgravity` (admin) toggles `sv_gravity` between normal (800) and low (250). Resets to normal at the start of every map — off by default, opt-in per map.
+- **Nominations + RockTheVote** — `nominate <mapname>` lets players nominate a map into a shared pool (max 6); `say /rockthevote` (or `say /rtv`) votes to change the map early, needs 60% of connected players, auto-fills the vote from `mapcycle.txt` if nobody nominated anything. `amx_nomvote` (admin) can also force-start a vote. 20 second vote timer, changes level to the winner. Companion to the stock `mapchooser.amxx` vote-for-nextmap system. **This is a real, working implementation** — `say /rockthevote` isn't a pre-existing AMX Mod X command, it's this custom plugin.
+- **AFK Manager** — tracks player position via `get_user_origin` on a repeating timer; no movement for 60s gets a warning, 180s gets kicked. Pure polling, no forwards/hooks that this build doesn't support. **Exempts spectators/observers**: `is_user_alive()` alone doesn't distinguish "observer" from "alive playing," and an observer's camera doesn't move in world-origin terms the way a playing client's does, which caused false-positive idle kicks on anyone spectating. Fixed by checking `pev(id, pev_iuser1) != 0` (observer flag) and skipping the idle timer entirely for those players.
+- **Low Gravity** — `amx_lowgravity` (admin) toggles `sv_gravity` between normal (800) and low (250). Resets to normal at the start of every map — off by default, opt-in per map. Available on request alongside HookMod (see MOTD below).
 
 ### Rats map pack
 
@@ -303,6 +303,39 @@ All `.pwf` files go in `cstrike\addons\podbot\wptdefault\`. As a matter of cours
 ### Maps installed but not in rotation
 
 A bulk map+waypoint pack pulled from GameBanana (18 maps, none rats-themed — `de_cache`, `de_overpass`, `de_construction`, `de_vegas`, `de_impact`, `de_vengeance`, `de_virus`, `de_westwood`, `de_zima`, `de_alphacode_wi`, `de_ironblood`, `de_civic`, `de_verso`, `de_gorge`, `de_mysterious`, `de_onyx`, `de_scud`, `de_simpsons`) is installed on disk with working bot waypoints, but deliberately left out of `mapcycle.txt` to keep the rotation rats-only. Add any of them to `mapcycle.txt` whenever you want — no further setup needed, bots included.
+
+### Bot cosmetics and difficulty
+
+Out of the box, PODBot mm's default bot names carry a `[P0D]`/`[P*D]`/`[POD]`-style prefix and bots will occasionally send chat messages — both changed for this server:
+
+- `cstrike\addons\podbot\botnames.txt` — every bot name rewritten with a uniform `[BOT] ` prefix (truncated where needed to fit PODBot's 21-character name limit).
+- `pb_detailnames 1` → `0` and `pb_chat 1` → `0` in `podbot.cfg` — disables the extra name-decoration and bot chat.
+- `pb_minbotskill`/`pb_maxbotskill` set to `1`/`30` (from the defaults of `95`/`100`) — all bots play at low difficulty.
+
+### Spectator mode
+
+`allow_spectators 1` is set in `server.cfg` (the correct cvar name for this build — `mp_allowspectators` doesn't exist here, that name came later). Confirmed via binary string-scan of `mp.dll` before use, per the pattern established in the anti-cheat section above: always verify a cvar exists in this exact binary before assuming it, since cvar names shifted across HLDS versions.
+
+### Server identity and MOTD
+
+Server is named **"Indie's Rats"** (`hostname` in `server.cfg`; also remove any `+hostname` override from the launch shortcut/scheduled task, since that flag overrides `server.cfg`). `cstrike\motd.txt` was rewritten to explain the rats theme, mention that HookMod and low gravity are both available on request, and list the RockTheVote/nomination commands above.
+
+### Advanced Quake Sounds (AQS)
+
+[Advanced Quake Sounds](https://github.com/ClaudiuHKS/AdvancedQuakeSounds) adds Quake-style announcer callouts (multi-kill, first blood, etc.). Installed from the project's raw GitHub files (`AQS.sma`, `AQS.ini`, `sound.zip`), compiled locally with `amxxpc.exe` like the custom plugins above — it doesn't need Orpheu or ReAPI on this build, confirmed by checking that `get_gamerules_float` (the native it actually uses) exists in `fakemeta.inc`.
+
+Two non-fatal warnings appear at boot, consistent with the gamedata-mismatch pattern discussed in the anti-cheat section: an invalid `register_event("HLTV",...)` call, and `get_gamerules_size` disabled. The plugin still loads and runs — one minor sub-feature is degraded, not the whole thing.
+
+### Map asset audits
+
+Third-party map packs from GameBanana/varq.net/etc. don't always ship every custom sound/model/sprite a map's `.bsp` references — `de_rats4_final` originally shipped with three missing ambient sounds because the pack used for it was map-only. To catch this systematically across the whole map rotation (not just the one map where it was noticed), a PowerShell script scans every installed `.bsp`'s raw bytes for `.wav`/`.mdl`/`.spr` references (GoldSrc entity data stores these as plain ASCII strings) and checks whether the referenced file actually exists on disk.
+
+Two things worth knowing if you write your own version of this:
+
+- **Check the `valve\` fallback folder, not just `cstrike\`.** GoldSrc mods inherit shared assets from the base game's folder when the mod folder doesn't override them — a naive script that only checks `cstrike\` will report hundreds of false positives on completely untouched stock maps like `de_dust2`, because they're relying on `valve\sound\...` for shared ambience/weapon sounds.
+- **Sound vs. model/sprite paths resolve differently.** A `.wav` reference in an `ambient_generic` entity is stored *relative to* `sound\`, without that prefix — you have to prepend it yourself. A `.mdl`/`.spr` reference already includes its own folder prefix (e.g. `models\props\trash.mdl`) — using it as-is. Getting this backwards produces doubled-path false positives like `models\models\hostage.mdl`.
+
+Running the corrected script found 117 missing references across 19 of the 66 installed maps. Most were fixed by re-downloading the map's full resource pack (not just the `.bsp`) from GameBanana/varq.net and copying in the missing files — 105 of 117 resolved this way. The remaining 13 (scattered ambient sounds and a couple of decorative prop models across `de_the_office_rats_csz`, `de_rats4_final`, `de_overpass`, `de_rats_bedroom`, `de_impact`, and the Apache-helicopter sound shared by `as_oilrig`/`as_tundra`/`de_alphacode_wi`) couldn't be sourced from any mirror — these are silent gaps (a missing ambient sound plays nothing, a missing model just doesn't render), not crashes, so they were left as a known minor cosmetic issue rather than blocking anything.
 
 ---
 
