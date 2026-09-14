@@ -194,7 +194,7 @@ Your server should appear on [https://won2.net/Browse-Servers/](https://won2.net
 
 ## Optional: AMX Mod X (Admin, RockTheVote, HookMod, Rats Maps)
 
-This adds a full plugin stack on top of the base server: admin commands, map-vote (RockTheVote), the HookMod grappling-hook plugin, a lightweight anti-cheat, and an expanded rats map rotation. Everything here is layered on top of Steps 1–11 — don't skip those first.
+This adds a full plugin stack on top of the base server: admin commands, map-vote (RockTheVote), the HookMod grappling-hook plugin, custom nomination/AFK/low-gravity plugins, and a rats-only map rotation. See also [PODBot mm](#podbot-mm-bots) below for bots. Everything here is layered on top of Steps 1–11 — don't skip those first.
 
 ### Compatibility note
 
@@ -232,20 +232,77 @@ Admin commands, admin menus, and map-vote/nextmap (`mapchooser.amxx` — this is
 1. Download `hook.rar`, extract, and copy `adminhook.amxx` to `cstrike\addons\amxmodx\plugins\`.
 2. Add a line for it in `cstrike\addons\amxmodx\configs\plugins.ini`.
 
-### Anti-cheat: CvarGuard (custom, lightweight)
+### Anti-cheat: don't bother with `query_client_cvar` on this build
 
-Given the ReHLDS/ReGameDLL incompatibility above, this server uses a small custom plugin (`cvarguard.sma`, compiled with the `amxxpc.exe` bundled in `addons/amxmodx/scripting/`) instead of a stock anti-cheat module. It uses GoldSrc's native `query_client_cvar` — a stable, network-protocol-level feature present since the original engine, not a memory scan — to periodically check each client's `cl_lw` cvar. A forced `cl_lw 0` is a known config-cheat pattern (disables lagged-weapon/hitbox prediction); the plugin logs it and kicks after 3 strikes. It won't catch aimbots or wallhacks — that requires the memory-level hooking this binary's gamedata doesn't support — but it's a real, working layer with zero crash risk, and it's easy to extend with more cvar checks (`rate`, `cl_updaterate`, etc.) if you want to tighten it further. Combined with the admin tools' manual kick/ban, this covers config-based cheating and gives you recourse for anything else that gets reported.
+An earlier version of this section documented a custom plugin (`cvarguard.sma`) that used AMX Mod X's `query_client_cvar` native to flag suspicious client cvars. **It doesn't work, and the failure is silent unless you check the logs.** `query_client_cvar` requires HLDS build 3382 or later on both server and client — this server runs build **2056** (June 2002), confirmed by grepping the exact build number out of the boot banner and cross-referencing AMX Mod X's own bug tracker. The plugin loads without error and just never fires; you won't notice unless you're watching for `Client CVAR querying is not enabled - check MM version!` in the log (which, notably, it also throws for PODBot's fake clients, which is how this got caught).
+
+Real memory-hooking anti-cheat is off the table too, for the same reason as the ReHLDS/ReGameDLL note above — this build's gamedata doesn't support it (see the `Binding/Hooking cvars have been disabled` warning at boot).
+
+What actually works, because it's enforced by the engine's own connection handshake rather than a plugin: native rate/update cvars in `server.cfg`. Confirmed present in this exact `swds.dll` by scanning the binary for the literal cvar strings — `sv_mincmdrate`/`sv_maxcmdrate` are **not** present (added in a later build than this one) and are omitted:
+
+```
+sv_minrate 3000
+sv_maxrate 25000
+sv_minupdaterate 20
+sv_maxupdaterate 60
+sv_cheats 0
+```
+
+This won't catch aimbots or wallhacks (nothing will, on this binary, without deep reverse-engineering work) — it's a config-abuse baseline. Combine with admin.amxx's manual kick/ban for anything a plugin can't catch.
+
+### Custom plugins
+
+Three small plugins, compiled locally with the `amxxpc.exe` bundled in `addons/amxmodx/scripting/` (no third-party download needed — write the `.sma`, run `amxxpc.exe yourplugin.sma`, copy the resulting `.amxx` to `addons/amxmodx/plugins/`, add it to `plugins.ini`):
+
+- **Nominations** — `nominate <mapname>` lets players nominate a map into a shared pool (max 6); `amx_nomvote` (admin) starts a vote among nominated maps, 20 second timer, changes level to the winner. Companion to the stock `mapchooser.amxx` vote-for-nextmap system.
+- **AFK Manager** — tracks player position via `get_user_origin` on a repeating timer; no movement for 60s gets a warning, 180s gets kicked. Pure polling, no forwards/hooks that this build doesn't support.
+- **Low Gravity** — `amx_lowgravity` (admin) toggles `sv_gravity` between normal (800) and low (250). Resets to normal at the start of every map — off by default, opt-in per map.
 
 ### Rats map pack
 
-Two verified map sources add 9 rats-genre maps to `mapcycle.txt`:
+22 rats-genre maps from four sources, all in `mapcycle.txt` (the stock maps were removed entirely — this build runs rats-only):
 
 - [Rats Map Pack](https://varq.net/en/maps/counter-strike-1.6/rats-map-pack) — `cs_rats2`, `de_rats`, `de_rats3`, `de_rats4_final`
 - [Chris Spain's CS Rats Pack](https://gamebanana.com/mods/452532) (the original rats maps author's own releases) — `de_rats_2001`, `de_rats_2002`, `de_rats2_2002`, `de_rats3_2002`, `de_ratsxl`
+- [de_desktop](https://gamebanana.com/mods/83585) — found by searching GameBanana's own site search directly (its general map-search API doesn't surface everything; the in-page search box does)
+- A curated pull from GameBanana's full CS 1.6 map catalog (game ID `4254` — the API's own game-ID guesses are wrong, verify it against a known mod first) searched for `rats`: `de_rats_bedroom`, `de_rats_nintendo`, `de_officeratz`, `de_ratworld` (actual bsp is `de_ratworld_v1`, comes with a full custom asset folder — models/sounds/sprites/textures, not just the map), `de_outhouse`, `de_rats_italy` (actual bsp is `de_italy_rats` — filename doesn't match the mod title), `de_rats_garden_csz`, `de_rats_cave_csz`, `de_rats_aircraft_csz`, `de_the_office_rats_csz`, `cs_rats5`, `de_rats_motel`, `de_rats_apartment`
 
-Extract each pack's `maps\*.bsp`/`*.res`/`*.txt` into `cstrike\maps\`, and add the map names (one per line, no extension) to `cstrike\mapcycle.txt`.
+Extract each pack's `maps\*.bsp`/`*.res`/`*.txt`/`*.nav` into `cstrike\maps\` (and any `models`/`sound`/`sprites`/`gfx` folders into the matching `cstrike` subfolder, for maps like `de_ratworld_v1`/`de_desktop` that ship custom assets), and add the map names to `cstrike\mapcycle.txt` — the actual filename, not the mod's display title, for the two maps noted above where they differ.
 
-> **Note:** `de_desktop` (referenced in some map lists) could not be tracked down from a live, verifiable download source at the time of writing. If you find a working link, it installs the same way as the maps above.
+GameBanana's file API (`https://gamebanana.com/apiv11/Mod/<id>?_csvProperties=_sName,_aFiles`) gives a direct, scriptable download URL and an AV scan result for any mod page — much more reliable than scraping the page itself, which is a heavy client-rendered SPA.
+
+---
+
+## PODBot mm (Bots)
+
+[PODBot mm](https://github.com/APGRoboCop/podbot_mm) — the classic waypoint-based bot, actively maintained on GitHub, and explicitly documented as compatible with CS 1.5. This matters more than it sounds: the modern alternatives (RCBot2, YaPB) are built and tested against ReHLDS/ReGameDLL, not this vintage of binary, and carry the same crash risk discussed above for anti-cheat plugins. PODBot mm predates all of that and works as a plain Metamod plugin, no engine rewrite required.
+
+### Install
+
+1. Download [`podbot_full_V3B24.zip`](https://github.com/APGRoboCop/podbot_mm/releases/download/V3B24-APG/podbot_full_V3B24.zip) and extract it. The `podbot` folder inside becomes `cstrike\addons\podbot\` (the whole folder, not just the DLL — it ships with a large default waypoint set and config files you want).
+2. Add a line to `cstrike\addons\metamod\plugins.ini`:
+   ```
+   win32 addons/podbot/podbot_mm.dll
+   ```
+3. Start the server and check for the POD-Bot mm version banner in the console alongside Metamod's and AMX Mod X's.
+
+`podbot.cfg` (in the podbot folder) ships configured to auto-add 6 bots on every map start (`pb add 100` × 6) — adjust the count or remove those lines if you don't want that.
+
+### Waypoints
+
+PODBot needs a `.pwf` waypoint file per map to spawn bots on it — without one, it just logs `No Waypoints for this Map, can't create Bot!` and continues normally, no crash. The default download already covers most stock maps (`de_dust2`, `de_aztec`, `cs_office`, etc. — 60 waypoint files, including CS-1.5-specific variants marked `(CS 1.5)`).
+
+For the rats maps, waypoints came from three places:
+
+- **Bundled with the map itself** — some of the GameBanana `_csz`-suffixed rats maps ship their own `.pwf` inside the map's own download, under `addons/podbot/wptdefault/`. Worth checking every map archive's file listing for this before assuming you need to source one separately.
+- **A dedicated waypoint submission** — searching GameBanana for `<mapname> waypoint` surfaces standalone waypoint uploads for specific maps (e.g. `de_rats` has one). Watch out for waypoints in the *wrong format*: some submissions labeled "waypoints" actually contain a `.nav` file — the mesh-based navigation format from the official Valve CS bot (or Source-engine games), which is a completely different system from PODBot's point-graph `.pwf` format and isn't usable here. Check the file extension before installing, not just the listing title.
+- **Bulk waypoint packs** — old community collections covering thousands of maps at once occasionally include a niche map by chance. One useful source: [csgames.lt's "5600 Waypoints Pack"](https://csgames.lt/2013/10/07/downloads/5600-waypoint-pack-podbot/), hosted on MEGA (not directly scriptable — the decryption key lives in the URL fragment, which only MEGA's own client handles, so this one needs a manual download). **If you're handed an old `.exe` from a source like this, don't run it** — most of these old packs are self-extracting 7z/RAR archives with a small stub attached, and `7z.exe`'s own list/extract mode reads the archive table directly without ever executing the stub. Always list contents first (`7z l file.exe`) and check for anything other than expected data extensions (`.pwf`/`.pvi`/`.pxp` for waypoints; `.bsp`/`.res`/`.wad`/`.mdl`/`.wav`/`.spr` for maps) before extracting, let alone running.
+
+All `.pwf` files go in `cstrike\addons\podbot\wptdefault\`. As a matter of course, this server keeps the entire unused portion of any waypoint pack it downloads (5600+ files, ~300MB — trivial disk cost) rather than just the maps currently in rotation, since a waypoint is only useful data sitting there for later, and PODBot only reads whichever one matches the current map.
+
+### Maps installed but not in rotation
+
+A bulk map+waypoint pack pulled from GameBanana (18 maps, none rats-themed — `de_cache`, `de_overpass`, `de_construction`, `de_vegas`, `de_impact`, `de_vengeance`, `de_virus`, `de_westwood`, `de_zima`, `de_alphacode_wi`, `de_ironblood`, `de_civic`, `de_verso`, `de_gorge`, `de_mysterious`, `de_onyx`, `de_scud`, `de_simpsons`) is installed on disk with working bot waypoints, but deliberately left out of `mapcycle.txt` to keep the rotation rats-only. Add any of them to `mapcycle.txt` whenever you want — no further setup needed, bots included.
 
 ---
 
