@@ -335,7 +335,37 @@ Two things worth knowing if you write your own version of this:
 - **Check the `valve\` fallback folder, not just `cstrike\`.** GoldSrc mods inherit shared assets from the base game's folder when the mod folder doesn't override them — a naive script that only checks `cstrike\` will report hundreds of false positives on completely untouched stock maps like `de_dust2`, because they're relying on `valve\sound\...` for shared ambience/weapon sounds.
 - **Sound vs. model/sprite paths resolve differently.** A `.wav` reference in an `ambient_generic` entity is stored *relative to* `sound\`, without that prefix — you have to prepend it yourself. A `.mdl`/`.spr` reference already includes its own folder prefix (e.g. `models\props\trash.mdl`) — using it as-is. Getting this backwards produces doubled-path false positives like `models\models\hostage.mdl`.
 
-Running the corrected script found 117 missing references across 19 of the 66 installed maps. Most were fixed by re-downloading the map's full resource pack (not just the `.bsp`) from GameBanana/varq.net and copying in the missing files — 105 of 117 resolved this way. The remaining 13 (scattered ambient sounds and a couple of decorative prop models across `de_the_office_rats_csz`, `de_rats4_final`, `de_overpass`, `de_rats_bedroom`, `de_impact`, and the Apache-helicopter sound shared by `as_oilrig`/`as_tundra`/`de_alphacode_wi`) couldn't be sourced from any mirror — these are silent gaps (a missing ambient sound plays nothing, a missing model just doesn't render), not crashes, so they were left as a known minor cosmetic issue rather than blocking anything.
+Running the corrected script found 117 missing references across 19 of the 66 installed maps. All 117 were eventually resolved by re-downloading each map's full resource pack (not just the `.bsp`) and copying in the missing files, but a few lessons from tracking down the stubborn ones:
+
+- **Two GameBanana mods can share a near-identical name for completely different maps.** `de_office_rats` (by one author) and `de_the_office_rats_csz` (by another) are unrelated maps that happen to share an office theme — grabbing the wrong one silently "fixes" nothing for the one you actually run, because none of the filenames match. Always search GameBanana for the map's *exact* filename, not a shortened/similar one, especially for `_csz`-suffixed maps that tend to get confused with plainer-named cousins.
+- **A map can have more than one GameBanana listing, and only one might include full resources.** The `de_rats4_final.bsp` in `mapcycle.txt` is a distinct submission (`de_rats4_final`, by a different uploader) from the more commonly-linked `de_rats4` map-only pack — the map-only one is what's usually found first, but the dedicated listing had the missing ambient sounds bundled in.
+- **Assets missing from every map pack you can find might belong to the base game, not the map.** `as_oilrig`/`as_tundra`/`de_alphacode_wi` were all missing the same two Apache helicopter rotor sounds (`sound/apache/ap_rotor2.wav`, `ap_rotor4.wav`) — these come from Half-Life's singleplayer `monster_apache` entity (see [apache.cpp](https://github.com/ValveSoftware/halflife/blob/master/dlls/apache.cpp)), which a dedicated-server-only install of `valve\` never ships (no `valve\sound\apache\` folder at all). Sourced from a GitHub Half-Life asset mirror instead of any map pack.
+- Two lone models (`pred_plant.mdl` for `de_overpass`, `pi_bush.mdl` for `de_rats_bedroom`) and one sound (`de_impact`'s `sound/radio/elim.wav`) weren't in any map pack at all — found via a large open Counter-Strike custom-content directory index rather than GameBanana/varq.net.
+
+---
+
+## Auto-Restart Watchdog
+
+A small watchdog keeps the server running unattended:
+
+- `C:\HLServer\watchdog.ps1` checks whether `hlds.exe` is running, and if not, logs the fact and triggers a scheduled task that relaunches it.
+- Registered as scheduled task `CsServerWatchdog`: runs every 5 minutes, as `SYSTEM`, logon mode `Interactive/Background` (so it runs whether or not anyone is logged into the console).
+- The relaunch target, scheduled task `CsServerLaunch`, runs the actual `hlds.exe ...` launch command.
+
+**Gotcha: `CsServerLaunch` must also be `Interactive/Background`, not `Interactive only`.** If the launch task is created as "Interactive only" (the default you get from `/it` in `schtasks /create`, useful *during setup* so you can see the console window and confirm the server boots cleanly), it silently fails to run whenever nobody is logged into the VM's console — `schtasks /run` reports `SUCCESS: Attempted to run...` even though nothing happens, and the task's `Last Run Time` never updates. This defeats the whole point of a watchdog: if the VM reboots (e.g. a Windows Update) and nothing auto-logs into the console afterward, the watchdog detects `hlds.exe` is down every 5 minutes forever but can never actually bring it back. Recreate the task without `/it` once you've confirmed the launch command works:
+
+```powershell
+schtasks /delete /tn CsServerLaunch /f
+schtasks /create /tn CsServerLaunch /tr "cmd.exe /c cd /d C:\HLServer && hlds.exe -console -game cstrike +map de_rats4_final +maxplayers 16 -port 27015 +ip 192.168.0.210 +sv_lan 1" /sc onstart /ru SYSTEM /rl highest /f
+```
+
+Running as `SYSTEM` needs no stored password and works for `hlds.exe` since it doesn't need any particular user-account privileges — it's just listening on a UDP port and reading/writing its own folder.
+
+## No HTTP Fast-Download — Pre-Sync Client Content Instead
+
+Modern GoldSrc/Source servers can point clients at an HTTP mirror (`sv_downloadurl`) for fast, reliable resource downloads. **This build doesn't have it** — confirmed by scanning `swds.dll` for the cvar string, which isn't present at all (it was added in a later HLDS revision than this June 2002 build). The only download path available is the original slow, unreliable UDP-based resource transfer (`sv_allowdownload`/`cl_allowdownload`), which is prone to client-side timeouts, especially once you've added a lot of third-party content (custom maps bring their own models/sounds/sprites, and there's a lot of it in a rats-only rotation).
+
+The practical fix is to avoid triggering in-game downloads at all: mirror the server's `cstrike\maps`, `cstrike\sound`, `cstrike\models`, and `cstrike\sprites` folders onto each regular player's own client install ahead of time, so their client already has everything and never needs to request it mid-connect. Re-sync after adding any new map or plugin that ships its own custom assets.
 
 ---
 
